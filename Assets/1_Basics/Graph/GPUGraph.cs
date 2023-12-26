@@ -14,11 +14,11 @@ public class GPUGraph: MonoBehaviour {
     [SerializeField, Range(10, maxResolution)]
     int resolution;
 
-    [SerializeField, Min(0f)]
-    float functionDuration = 1f;
+    // [SerializeField, Min(0f)]
+    // float functionDuration = 1f;
 
-    [SerializeField, Min(0f)]
-    float transitionDuration = 0.5f;
+    // [SerializeField, Min(0f)]
+    // float transitionDuration = 0.5f;
 
     private const int maxResolution = 1000;
 
@@ -28,9 +28,9 @@ public class GPUGraph: MonoBehaviour {
     private static readonly int stepId = Shader.PropertyToID("_Step");
     private static readonly int timeId = Shader.PropertyToID("_Time");
 
-    private Vector3 scale {
-        get { return Vector3.one * 2f / resolution; }
-    }
+    // private Vector3 scale {
+    //     get { return Vector3.one * 2f / resolution; }
+    // }
 
     void OnEnable() {
         positionBuffer = new ComputeBuffer(maxResolution * maxResolution, 3 * 4); // 3 floats 4 bytes each
