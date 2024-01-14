@@ -5,8 +5,80 @@ using Unity.Mathematics;
 using static Unity.Mathematics.math;
 
 public static class Shapes {
+    public struct Point4 {
+        public float4x3 positions;
+        public float4x3 normals;
+    }
+
+    public interface IShape {
+        Point4 GetPoint4(int i, float resolution, float invResolution);
+    }
+
+    public delegate JobHandle ScheduleDelegate(
+        NativeArray<float3x4> positions,
+        NativeArray<float3x4> normals,
+        int resolution,
+        float4x4 trs,
+        JobHandle dependency
+    );
+
+    public struct Plane: IShape {
+        public Point4 GetPoint4(int i, float resolution, float invResolution) {
+            float4x2 uv = IndexTo4UV(i, resolution, invResolution);
+
+            return new() {
+                positions = float4x3(uv.c0 - 0.5f, 0, uv.c1 - 0.5f),
+                normals = float4x3(0, 1, 0)
+            };
+        }
+    }
+
+    public struct Sphere: IShape {
+        public Point4 GetPoint4(int i, float resolution, float invResolution) {
+            float4x2 uv = IndexTo4UV(i, resolution, invResolution);
+
+			float r = 0.5f;
+			float4 s = r * sin(PI * uv.c1);
+
+			Point4 p;
+			p.positions.c0 = s * sin(2f * PI * uv.c0);
+			p.positions.c1 = r * cos(PI * uv.c1);
+			p.positions.c2 = s * cos(2f * PI * uv.c0);
+			p.normals = p.positions;
+			return p;
+        }
+    }
+
+    public struct Torus: IShape {
+		public Point4 GetPoint4(int i, float resolution, float invResolution) {
+			float4x2 uv = IndexTo4UV(i, resolution, invResolution);
+
+			float r1 = 0.375f;
+			float r2 = 0.125f;
+			float4 s = r1 + r2 * cos(2f * PI * uv.c1);
+
+			Point4 p;
+			p.positions.c0 = s * sin(2f * PI * uv.c0);
+			p.positions.c1 = r2 * sin(2f * PI * uv.c1);
+			p.positions.c2 = s * cos(2f * PI * uv.c0);
+			p.normals = p.positions;
+            p.normals.c0 -= r1 * sin(2f * PI * uv.c0);
+			p.normals.c2 -= r1 * cos(2f * PI * uv.c0);
+			return p;
+		}
+	}
+
+    public static float4x2 IndexTo4UV(int i, float resolution, float invResolution) {
+        float4 i4 = i * 4.0f + float4(0.0f, 1.0f, 2.0f, 3.0f);
+        float4x2 uv;
+        uv.c1 = floor(invResolution * i4 + 0.00001f);
+        uv.c0 = invResolution * (i4 - resolution * uv.c1 + 0.5f);
+        uv.c1 = invResolution * (uv.c1 + 0.5f);
+        return uv;
+    }
+
     [BurstCompile(FloatPrecision.Standard, FloatMode.Fast, CompileSynchronously = true)]
-    public struct Job: IJobFor {
+    public struct Job<S>: IJobFor where S: struct, IShape {
         [WriteOnly]
         public NativeArray<float3x4> positions;
 
@@ -16,6 +88,7 @@ public static class Shapes {
         public float resolution;
         public float invResolution;
         public float3x4 positionTRS;
+        public float3x4 normalTRS;
 
         float4x3 TransformVectors(float3x4 trs, float4x3 p, float w = 1f) => float4x3(
             trs.c0.x * p.c0 + trs.c1.x * p.c1 + trs.c2.x * p.c2 + trs.c3.x * w,
@@ -24,15 +97,10 @@ public static class Shapes {
         );
 
         public void Execute(int i) {
-            float4 i4 = i * 4.0f + float4(0.0f, 1.0f, 2.0f, 3.0f);
-            float4x2 uv;
-            uv.c1 = floor(invResolution * i4 + 0.00001f);
-			uv.c0 = invResolution * (i4 - resolution * uv.c1 + 0.5f) - 0.5f;
-			uv.c1 = invResolution * (uv.c1 + 0.5f) - 0.5f;
+            Point4 p = default(S).GetPoint4(i, resolution, invResolution);
+            positions[i] = transpose(TransformVectors(positionTRS, p.positions));
 
-            positions[i] = transpose(TransformVectors(positionTRS, float4x3(uv.c0, 0, uv.c1)));
-
-            float3x4 n = transpose(TransformVectors(positionTRS, float4x3(0, 1, 0), 0));
+            float3x4 n = transpose(TransformVectors(normalTRS, p.normals, 0));
             normals[i] = float3x4(normalize(n.c0), normalize(n.c1), normalize(n.c2), normalize(n.c3));
         }
 
@@ -43,12 +111,15 @@ public static class Shapes {
             float4x4 trs,
             JobHandle dependency
         ) {
-            return new Job {
+            float4x4 tim = transpose(inverse(trs));
+
+            return new Job<S> {
                 positions = positions,
                 normals = normals,
                 resolution = resolution,
                 invResolution = 1f / resolution,
-                positionTRS = float3x4(trs.c0.xyz, trs.c1.xyz, trs.c2.xyz, trs.c3.xyz)
+                positionTRS = float3x4(trs.c0.xyz, trs.c1.xyz, trs.c2.xyz, trs.c3.xyz),
+                normalTRS = float3x4(tim.c0.xyz, tim.c1.xyz, tim.c2.xyz, tim.c3.xyz)
             }
             .ScheduleParallel(positions.Length, resolution, dependency);
         }

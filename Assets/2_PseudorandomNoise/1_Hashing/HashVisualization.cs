@@ -37,6 +37,18 @@ public class HashVisualization: MonoBehaviour {
         }
     }
 
+    public enum Shape {
+        Plane,
+        Sphere,
+        Torus
+    }
+
+    static Shapes.ScheduleDelegate[] shapeJobs = {
+        Shapes.Job<Shapes.Plane>.ScheduleParallel,
+        Shapes.Job<Shapes.Sphere>.ScheduleParallel,
+        Shapes.Job<Shapes.Torus>.ScheduleParallel
+    };
+
     static int 
         hashesId = Shader.PropertyToID("_Hashes"),
         positionsId = Shader.PropertyToID("_Positions"),
@@ -48,6 +60,12 @@ public class HashVisualization: MonoBehaviour {
 
     [SerializeField]
     Material material;
+
+    [SerializeField]
+    Shape shape;
+
+    [SerializeField, Range(0.1f, 10f)]
+    float instanceScale = 2f;
 
     [SerializeField, Range(1, 512)]
     int resolution = 16;
@@ -89,7 +107,7 @@ public class HashVisualization: MonoBehaviour {
         propertyBlock.SetBuffer(hashesId, hashesBuffer);
         propertyBlock.SetBuffer(positionsId, positionsBuffer);
         propertyBlock.SetBuffer(normalsId, normalsBuffer);
-        propertyBlock.SetVector(configId, new Vector4(resolution, 1f / resolution, displacement));
+        propertyBlock.SetVector(configId, new Vector4(resolution, instanceScale / resolution, displacement));
     }
 
     void Update() {
@@ -102,7 +120,7 @@ public class HashVisualization: MonoBehaviour {
                 float3(2f * cmax(abs(transform.lossyScale)) + displacement)
             );
 
-            JobHandle positionsJob = Shapes.Job.ScheduleParallel(
+            JobHandle positionsJob = shapeJobs[(int)shape](
                 positions,
                 normals,
                 resolution,
