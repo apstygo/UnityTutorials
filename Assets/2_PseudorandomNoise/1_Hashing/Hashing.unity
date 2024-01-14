@@ -342,6 +342,20 @@ MonoBehaviour:
   material: {fileID: 2100000, guid: e70da3827e5824b32806ecb63d4c3701, type: 2}
   resolution: 16
   seed: 0
+  displacement: 0.1
+  domain:
+    translation:
+      x: 0
+      y: 0
+      z: 0
+    rotation:
+      x: 0
+      y: 0
+      z: 0
+    scale:
+      x: 8
+      y: 8
+      z: 8
 --- !u!4 &1848796551
 Transform:
   m_ObjectHideFlags: 0
